@@ -1,0 +1,8 @@
+numpy
+ipywidgets
+pandas
+qgrid
+natsort
+plotly
+json_tricks
+

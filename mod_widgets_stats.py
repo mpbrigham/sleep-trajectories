@@ -551,14 +551,22 @@ class CacheLoader:
             self.source_out
         ]))
         self.source_select.observe(self.load_source, names='value')
+
+    def observe(self, *pargs):
+
+        return self.source_select.observe(*pargs)
             
     def load_source(self, change):
         
         if self.source_select.value!='':
 
+            path = self.source_select.value
             self.stats_m = {}
 
-            path = self.source_select.value
+            self.source_out.clear_output()
+            with self.source_out:
+                print('Loading...')
+            
             for name in self.sources[path]:
                 my_stats = mod_common_utils.from_cache(name, path)
 
@@ -569,4 +577,4 @@ class CacheLoader:
 
             self.source_out.clear_output()
             with self.source_out:
-                print('Loaded data from', os.path.join(self.base_path, path))
+                print('Loaded data from', path)

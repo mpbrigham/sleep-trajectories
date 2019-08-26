@@ -266,10 +266,9 @@ def rgb_to_rgba(color, alpha=1):
 
 class MetricsViewer:
 
-    def __init__(self, stats_m, multi=False, figures_folder=None):
+    def __init__(self, stats_m, figures_folder=None):
 
         self.stats_m = stats_m
-        self.multi = multi
         self.figures_folder = figures_folder
         self.selections, self.labels = selections_labels_get(self.stats_m)
 
@@ -326,137 +325,50 @@ class MetricsViewer:
         )
         
         self.data = self.data_select()
+        self.data_multi = self.data_select(multi=True)
         self.fig_widgets = self.plot_setup()
+        self.fig_widgets_multi = self.plot_setup(multi=True)
 
         self.image_layout = {'width': str(850)+'px' }
 
         self.fig_widgets_combo = []
-        for row_idx in range(int(len(self.fig_widgets)/2)):
+        self.fig_widgets_multi_combo = []
+        for fig_widgets, fig_widgets_combo in [
+            [self.fig_widgets, self.fig_widgets_combo],
+            [self.fig_widgets_multi, self.fig_widgets_multi_combo]
+        ]:
+            for row_idx in range(int(len(fig_widgets)/2)):
 
-            self.fig_widgets_combo += [
-                widgets.HBox(
-                    [
-                        self.fig_widgets[2*row_idx],
-                        self.fig_widgets[2*row_idx+1],
-                        # widgets.Image(
-                        #     disabled=True,
-                        #     layout=self.image_layout
-                        # )
-                    ], 
-                    layout={'flex_flow':'row wrap'}
-                )
-            ]
+                fig_widgets_combo += [
+                    widgets.HBox(
+                        [
+                            fig_widgets[2*row_idx],
+                            fig_widgets[2*row_idx+1],
+                            # widgets.Image(
+                            #     disabled=True,
+                            #     layout=self.image_layout
+                            # )
+                        ], 
+                        layout={'flex_flow':'row wrap'}
+                    )
+                ]
 
-        display(widgets.HBox([self.params_select, self.filter_select]))
+        display(widgets.VBox([self.params_select, self.filter_select]))
         display(widgets.VBox(self.fig_widgets_combo))
+        display(widgets.VBox(self.fig_widgets_multi_combo))        
         self.params_select.observe(self.plot_refresh, names='value')
         self.filter_select.observe(self.plot_refresh, names='value')
 
-    def data_filter(self):
-
-        my_stats_list = list(self.stats_m)
+    def plot_setup(self, multi=False):
         
-        if self.params_select.value=='':
-            my_stats_keys = {'All': my_stats_list}
-            my_labels = ['All']
+        if multi:
+            data = self.data_multi
         else:
-            my_stats_keys = self.selections[self.params_select.value].copy()
-            my_labels = self.labels[self.params_select.value]
-                
-        if self.filter_select.value!='':
-            for label in my_stats_keys:
-                my_stats_keys[label] = [
-                    key for key in my_stats_keys[label]
-                    if key in self.selections['psd_method'][self.filter_select.value]
-                ]
-        return my_stats_list, my_stats_keys, my_labels
+            data = self.data
 
-    def data_select(self):
-        
-        if self.multi:
-            data = self.data_select_multi()
-        else:
-            data = self.data_select_single()
-
-        return data
-
-    def data_select_single(self):
-    
-        my_stats_list, my_stats_keys, my_labels = self.data_filter()
-
-        data = []
-        for my_metric in self.my_metrics:
-
-            my_name = self.my_metrics_ref[my_metric]
-
-            idx_sort = np.argsort([
-                self.stats_m[key][my_metric] for key in my_stats_list
-            ])
-            if my_metric in ['davies_bouldin', 'val_davies_bouldin']:
-                idx_sort = idx_sort[::-1]
-
-            my_stats_sorted = [my_stats_list[idx] for idx in idx_sort]
-        
-            my_data = []
-            for my_label in my_labels:
-
-                my_x = [
-                    idx_key for idx_key, key in enumerate(my_stats_sorted) 
-                    if key in my_stats_keys[my_label]
-                ]
-                my_y = [
-                    self.stats_m[key][my_metric] for key in my_stats_sorted 
-                    if key in my_stats_keys[my_label]
-                ]
-                my_text = [
-                    key for key in my_stats_sorted
-                    if key in my_stats_keys[my_label]
-                ]
-
-                my_data += [[my_label, my_x, my_y, my_text]]
-                
-            data  += [[my_name, my_data]]
-
-        return data
-
-    def data_select_multi(self):
-    
-        my_stats_list, my_stats_keys, my_labels = self.data_filter()
-        
-        data = []
-        for my_metric_x, my_metric_y in self.my_metrics_multi:
-
-            my_name_x = self.my_metrics_ref[my_metric_x]
-            my_name_y = self.my_metrics_ref[my_metric_y]
-            my_name = (my_name_x, my_name_y)
-
-            my_data = []
-            for my_label in my_labels:
-
-                my_stats_label = [
-                    key for key in my_stats_list 
-                    if key in my_stats_keys[my_label]
-                ]
-
-                my_x = [
-                    self.stats_m[key][my_metric_x] for key in my_stats_label 
-                ]
-                my_y = [
-                    self.stats_m[key][my_metric_y] for key in my_stats_label 
-                ]
-                my_text = [key for key in my_stats_label]
-
-                my_data += [[my_label, my_x, my_y, my_text]]
-                
-            data  += [[my_name, my_data]]
-
-        return data
-
-    def plot_setup(self):
-        
         plot_widgets = []
-        for idx_data, (my_name, my_data) in enumerate(self.data):
-            
+        for idx_data, (my_name, my_data) in enumerate(data):
+
             trace = []
             for my_idx, (my_label, my_x, my_y, my_text) in enumerate(my_data):
 
@@ -473,13 +385,14 @@ class MetricsViewer:
                     name=my_label
                 )]
 
-            if self.multi:
-                my_title = my_name[0].split(' (')[0] + ' vs ' + my_name[0].split(' (')[0]
+            if multi:
+                my_title = my_name[0].split(' (')[0] + ' vs ' + my_name[1].split(' (')[0]
                 if 'Validation' in my_name[0]:
                     my_title += ' (Validation)'
                 my_metric_x, my_metric_y = self.my_metrics_multi[idx_data]
                 my_title_x = self.my_metrics_ref[my_metric_x].split(' Validation')[0]
                 my_title_y = self.my_metrics_ref[my_metric_y].split(' Validation')[0]
+
             else:
                 my_title = my_name.split(' (')[0]
                 if 'Validation' in my_name:
@@ -503,24 +416,117 @@ class MetricsViewer:
     def plot_refresh(self, change):
         
         self.data = self.data_select()
-        
-        for my_data_idx, (_, my_data) in enumerate(self.data):
-            
-            self.fig_widgets[my_data_idx].data = []            
-            for my_idx, (my_label, my_x, my_y, my_text) in enumerate(my_data):
+        self.data_multi = self.data_select(multi=True)
+
+        for fig_widgets, data in [
+            [self.fig_widgets, self.data],
+            [self.fig_widgets_multi, self.data_multi]
+        ]:
+            for my_data_idx, (_, my_data) in enumerate(data):
                 
-                color = rgb_to_rgba(self.colors_ref[my_idx], 0.5)
-                self.fig_widgets[my_data_idx].add_trace(go.Scatter(
-                    x=my_x,
-                    y=my_y,
-                    mode='markers',
-                    text=my_text,
-                    marker={
-                        'color': color,
-                        'size': 10
-                    },
-                    name=my_label
-                ))
+                fig_widgets[my_data_idx].data = []
+                for my_idx, (my_label, my_x, my_y, my_text) in enumerate(my_data):
+                    
+                    color = rgb_to_rgba(self.colors_ref[my_idx], 0.5)
+                    fig_widgets[my_data_idx].add_trace(go.Scatter(
+                        x=my_x,
+                        y=my_y,
+                        mode='markers',
+                        text=my_text,
+                        marker={
+                            'color': color,
+                            'size': 10
+                        },
+                        name=my_label
+                    ))
+
+    def data_filter(self):
+
+        my_stats_list = list(self.stats_m)
+        
+        if self.params_select.value=='':
+            my_stats_keys = {'All': my_stats_list}
+            my_labels = ['All']
+        else:
+            my_stats_keys = self.selections[self.params_select.value].copy()
+            my_labels = self.labels[self.params_select.value]
+                
+        if self.filter_select.value!='':
+            for label in my_stats_keys:
+                my_stats_keys[label] = [
+                    key for key in my_stats_keys[label]
+                    if key in self.selections['psd_method'][self.filter_select.value]
+                ]
+        return my_stats_list, my_stats_keys, my_labels
+
+    def data_select(self, multi=False):
+    
+        my_stats_list, my_stats_keys, my_labels = self.data_filter()
+
+        data = []
+        if multi:
+
+            for my_metric_x, my_metric_y in self.my_metrics_multi:
+
+                my_name_x = self.my_metrics_ref[my_metric_x]
+                my_name_y = self.my_metrics_ref[my_metric_y]
+                my_name = (my_name_x, my_name_y)
+
+                my_data = []
+                for my_label in my_labels:
+
+                    my_stats_label = [
+                        key for key in my_stats_list 
+                        if key in my_stats_keys[my_label]
+                    ]
+
+                    my_x = [
+                        self.stats_m[key][my_metric_x] for key in my_stats_label 
+                    ]
+                    my_y = [
+                        self.stats_m[key][my_metric_y] for key in my_stats_label 
+                    ]
+                    my_text = [key for key in my_stats_label]
+
+                    my_data += [[my_label, my_x, my_y, my_text]]
+                    
+                data  += [[my_name, my_data]]
+
+        else:
+
+            for my_metric in self.my_metrics:
+
+                my_name = self.my_metrics_ref[my_metric]
+
+                idx_sort = np.argsort([
+                    self.stats_m[key][my_metric] for key in my_stats_list
+                ])
+                if my_metric in ['davies_bouldin', 'val_davies_bouldin']:
+                    idx_sort = idx_sort[::-1]
+
+                my_stats_sorted = [my_stats_list[idx] for idx in idx_sort]
+            
+                my_data = []
+                for my_label in my_labels:
+
+                    my_x = [
+                        idx_key for idx_key, key in enumerate(my_stats_sorted) 
+                        if key in my_stats_keys[my_label]
+                    ]
+                    my_y = [
+                        self.stats_m[key][my_metric] for key in my_stats_sorted 
+                        if key in my_stats_keys[my_label]
+                    ]
+                    my_text = [
+                        key for key in my_stats_sorted
+                        if key in my_stats_keys[my_label]
+                    ]
+
+                    my_data += [[my_label, my_x, my_y, my_text]]
+                    
+                data  += [[my_name, my_data]]
+
+        return data
 
 
 class CacheLoader:
@@ -552,9 +558,7 @@ class CacheLoader:
         ]))
         self.source_select.observe(self.load_source, names='value')
 
-    def observe(self, *pargs):
-
-        return self.source_select.observe(*pargs)
+        self.widgets = ([self.source_select])
             
     def load_source(self, change):
         
